@@ -1,0 +1,271 @@
+* Chip8 Emulator
++ Simulator 中文叫模拟器；Emulator 中文叫仿真器。
++ Simulator 纯粹以软件来模拟源平台的功能和运行结果；Emulator 以软件和硬件来模拟源平台的内部设计、行为和运行结果。
+----
+1. 有使用硬件来模拟的，都是 Emulator。比如基于单片机的模拟。（什么是叫使用硬件模拟？
+   比如模拟源平台的 Timer/PPU/SPU, 直接使用目标平台的 Timer/PPU/SPU，那么就是硬件模拟）。
+2. 一般的，在 PC 上运行的模拟器都叫 Simulator，常见的是模拟 LCD 的显示画面; 
+   在嵌入平台上运行的模拟器都是 Emulator，
+   因为在嵌入平台运行的话，为了提高效率，都会以对应的硬件模块来模拟源平台。
+3. PC 上的模拟器如果模拟其内部设计、行为，比如读取 ROM 文件，精确中断、异常，OS 等都是 Emulator。
+#+begin_quote
+The Chip-8 actually never was a real system, but more like a virtual machine (VM) developed in the 70’s by Joseph Weisbecker.
+Games written in the Chip 8 language could easily run on systems 
+that had a Chip-8 interpreter.
+#+end_quote
+** Chip-8 Hardware Archite
+*** Instruction Sets
+[[http://devernay.free.fr/hacks/chip8/C8TECH10.HTM#2.4][Chip-8 Document]]
+*** Registers
+**** 16 8-bit Registers
+16 个 8-bit 的寄存器，记做 V0 ~ VF。
+**** 16-bit Index Registers
+索引寄存器是一个特殊的寄存器，用于存储操作中使用的内存地址。
+为什么选用 16 位的呢？
+对于一个 8 位的寄存器来说，最大的内存地址（0xFFF）实在是太大了。
+**** 16-bit Program Counter
+程序计数器用于储存待执行指令的地址
+**** 16-level Stack
+堆栈是 CPU 在调用函数时跟踪执行顺序的一种方式。
+**** 8-bit Stack Pointer
+类似于 PC 用来跟踪 CPU 在内存中的执行位置，
+堆栈指针(SP)可以告诉我们在 16 层堆栈中，离我们最近的值被放在哪里。
+**** 8-bit Delay Timer
+如果定时器的值为 0，则保持 0.
+若定时器的值不为 0，则自减到 0.
+**** 8-bit Sound Timer
+同上
+*** Memory
+**** 4K Bytes of Memory
+Memory Map:
++---------------+= 0xFFF (4095) End of Chip-8 RAM
+|                |
+|                |
+|                |
+|                |
+|                |
+| 0x200 to 0xFFF |
+| Chip-8         |
+| Program / Data |
+| Space          |
+|                |
+|                |
+|                |
++- - - - - - - -+= 0x600 (1536) Start of ETI 660 Chip-8 programs
+|               |
+|               |
+|               |
++---------------+= 0x200 (512) Start of most Chip-8 programs
+| 0x000 to 0x1FF|
+| Reserved for  |
+|  interpreter  |
++---------------+= 0x000 (0) Start of Chip-8 RAM
+0x050-0x0A0: Storage space for the 16 built-in characters (0 through F), 
+which we will need to manually put into our memory because 
+ROMs will be looking for those characters.
+
+*** 16 Input Keys
+Keypad       Keyboard
++-+-+-+-+    +-+-+-+-+
+|1|2|3|C|    |1|2|3|4|
++-+-+-+-+    +-+-+-+-+
+|4|5|6|D|    |Q|W|E|R|
++-+-+-+-+ => +-+-+-+-+
+|7|8|9|E|    |A|S|D|F|
++-+-+-+-+    +-+-+-+-+
+|A|0|B|F|    |Z|X|C|V|
++-+-+-+-+    +-+-+-+-+
+*** 64x32 Monochrome Display Memory
+CHIP-8 有一个 64x32 像素的屏幕用于输出画面，
+每个像素只有一个 bit，也就是只能显示两种颜色，0 为黑色 1 为白色，
+和大部分绘图系统一样，左上角的坐标为 (0, 0)。
+CHIP-8 的绘图指令非常简单，指定了三个参数，x, y 以及 n。绘
+图的流程是从内存中读取 n 个字节，每个字节为一行，从 (x, y) 开始与原有的像素进行 xor 『异或』运算。
+
+Old Pixel Off XOR New Pixel Off = Display Pixel Off
+
+Old Pixel Off XOR New Pixel On  = Display Pixel On
+
+Old Pixel On  XOR New Pixel Off = Display Pixel On
+
+Old Pixel On  XOR New Pixel On  = Display Pixel Off
+** Chip8's Emulation cycle
+#+BEGIN_SRC C
+void chip8::initialize()
+{
+  // Initialize registers and memory once
+}
+ 
+void chip8::emulateCycle()
+{
+  // Fetch Opcode
+  // Decode Opcode
+  // Execute Opcode
+
+  // Update timers
+}
+#+END_SRC
+每一个循环都仿真了 Chip-8 CPU 的一个时钟周期。
+在每个时钟周期中，仿真器进行取码『Fetch Opcode』、解码『Decode Opcode』和执行操作码『Execute Opcode』的操作。
+*** Fetch Opcode
+在这一阶段，仿真器系统将会从内存中取出操作码送至 PC 寄存器『Program Counter』。
+在仿真器系统中，指令可以用『数组』或者『函数指针表』来存储。
+**** Warning
+在使用数组进行操作码存储的时候，因为一个操作码的长度为 2 bytes，需要获取两个连续的字节，
+并将它们合并以获得实际的操作码。
+Example：
+#+BEGIN_SRC C++
+// Assume the following:
+memory[pc]     == 0xA2
+memory[pc + 1] == 0xF0
+opcode = (memory[pc] << 8u) | memory[pc + 1];
+#+END_SRC
+运算过程：
+0xA2       0xA2 << 8 = 0xA200   HEX
+10100010   1010001000000000     BIN
+-----------------------------------
+1010001000000000 | // 0xA200
+        11110000 = // 0xF0 (0x00F0)
+------------------
+1010001011110000   // 0xA2F0
+*** Decode Opcode
+检查操作码表，找出对应的的含义
+*** Execute Opcode
+执行操作码对应的操作。
+PC += 2
+*** Timers『定时器』
+除了执行操作码，Chip-8 还需要实现两个定时器。
++ delay timer
++ sound timer
+如果两个定时器被设置为大于零的值，则从当前值倒计时到零。
+** Progrmming!
+*** 初始化系统
++ 初始化 PC
++ 载入字体
++ 初始化随机数
++ 载入操作码函数指针表
+*** 将 ROM 载入内存
+chip-8 内存分配规定从 0x200 开始可以由程序自由使用
+#+BEGIN_SRC C++
+void Chip8::LoadROM(char const* filename)
+{
+	// Open the file as a stream of binary and move the file pointer to the end
+	std::ifstream file(filename, std::ios::binary | std::ios::ate);
+
+	if (file.is_open())
+	{
+		// Get size of file and allocate a buffer to hold the contents
+		std::streampos size = file.tellg();
+		char* buffer = new char[size];
+
+		// Go back to the beginning of the file and fill the buffer
+		file.seekg(0, std::ios::beg);
+		file.read(buffer, size);
+		file.close();
+		// Load the ROM contents into the Chip8's memory, starting at 0x200
+		for (long i = 0; i < size; ++i)
+		{
+			memory[START_ADDRESS + i] = buffer[i];
+		}
+		// Free the buffer
+		delete[] buffer;
+	}
+}
+#+END_SRC
+*** 开始仿真！ :ATTACH:
+#+BEGIN_SRC C++
+void Chip8::Cycle()
+{
+	/
+[[attachment:_20210505_20223620191117112726216.png]]
+/ Fetch
+	opcode = (memory[pc] << 8u) | memory[pc + 1];
+	// Increment the PC before we execute anything
+	pc += 2;
+	// Decode and Execute
+	((*this).*(table[(opcode & 0xF000u) >> 12u]))();
+
+	// Decrement the delay timer if it's been set
+	if (delayTimer > 0)
+	{
+		--delayTimer;
+	}
+	// Decrement the sound timer if it's been set
+	if (soundTimer > 0)
+	{
+		--soundTimer;
+	}
+}
+#+END_SRC
+** Use SDL2 Library
+我们将使用 SDL 以多平台的方式来渲染和获取输入。
+使用 SDL_Renderer 可以给我们提供 2D GPU 加速，SDL_Texture 是渲染 2D 图像的简单方法。
+
+在创建一个 SDL 的 project 时需要进行以下的初始化：
++ window SDL_CreateWindow 窗口
++ renderer SDL_CreateRenderer 渲染器
++ texture SDL_CreateTexture 纹理
+在 chip8 这个项目中，我们还需要更新画面和对输入进行判断，故：
++ Update
++ ProcessInput
+还需要以上两个函数。 
+*** Update
+更新渲染数据需要三个过程：
++ 设置纹理数据
++ 清除渲染旧的纹理
++ 新的纹理复制给渲染器
++ 显示
+对应 SDL 的四个函数：
++ SDL_UpdateTexture
++ SDL_RenderClear
++ SDL_RenderCopy
++ SDL_RenderPresent
+为了实现以上四个功能，Update 函数需要提供『pixels』像素数据和『pitch』一行像素数据的字节数。
+#+BEGIN_SRC C++
+extern DECLSPEC int SDLCALL SDL_UpdateTexture(SDL_Texture * texture,
+                                              const SDL_Rect * rect,
+                                              const void *pixels, int pitch);
+#+END_SRC
+如上函数所示，故需要提供 void const* buffer, int pitch 两个参数。
+*** ProcessInput
+键盘事物相关的数据类型
++ SDLKey 枚举类型，每一个符号代表一个键
++ SDLMod 枚举类型，类似 SDLKey，但用于修饰键，如 Control、Alt、Shift
++ SDL_keysym SDL_Keysym，The key that was pressed or released
++ SDL_KeyboardEvent
+#+BEGIN_SRC C++
+typedef struct SDL_KeyboardEvent
+{
+    Uint32 type;        /**< ::SDL_KEYDOWN or ::SDL_KEYUP */
+    Uint32 timestamp;   /**< In milliseconds, populated using SDL_GetTicks() */
+    Uint32 windowID;    /**< The window with keyboard focus, if any */
+    Uint8 state;        /**< ::SDL_PRESSED or ::SDL_RELEASED */
+    Uint8 repeat;       /**< Non-zero if this is a key repeat */
+    Uint8 padding2;
+    Uint8 padding3;
+    SDL_Keysym keysym;  /**< The key that was pressed or released */
+} SDL_KeyboardEvent;
+#+END_SRC
+在一个读取键盘的流程中，首先需要在消息循环用 SDL_PollEvent()从消息队列里读取。
+接着使用 switch-case 检测 SDL_KEYUP 和 SDL_KEYDOWN。
+将键位对应的数组项储存的值改为对应的状态，1表示 SDL_KEYDOWN||0 表示 SDL_KEYUP
+** Main Loop
+主程序的流程如下：
+1. 判断是否输入 Scale、Delay、ROM
+2. 初始化 Scale、Delay 对应的变量
+3. 初始 SDL2 窗口
+4. 初始化 Chip8
+   1. 加载 ROM 文件
+   2. 配置循环时间
+5. while 循环
+   1. 读取 ProcessInput
+   2. 设置 Time
+   3. 更新画面内容
+
+ ✘ 
+** References
++ [[https://en.wikipedia.org/wiki/CHIP-8][Wiki of Chip-8]]
++ [[https://austinmorlan.com/posts/chip8_emulator/][BUILDING A CHIP-8 EMULATOR [C++]​]]
++ [[http://www.multigesture.net/articles/how-to-write-an-emulator-chip-8-interpreter/][How to write an emulator (CHIP-8 interpreter)]]
++ [[https://cjting.me/2020/06/07/chip8-emulator/][用 C 实现一个 CHIP-8 模拟器]]
++ [[https://brendanwhitfield.wordpress.com/2015/02/26/using-cmake-with-sdl2/][USING CMAKE WITH SDL2]]
